@@ -231,7 +231,7 @@ class match_history:
         expected_teammates_count = game_num * len(self.sorted_players)
 
         game_not_found = True
-        team_tolerance = 0.05
+        team_tolerance = 0.1
         test_players = self.players
 
         while game_not_found:

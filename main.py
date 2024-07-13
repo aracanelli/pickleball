@@ -8,6 +8,19 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 DATABASE_URL = os.getenv('DATABASE_URL')
+
+def print_all(sorted_players):
+    print("All players sorted by ELO:")
+    for rank, player in enumerate(sorted_players, start=1):
+        #if player.sub == False:
+        print(f"Rank: {rank}, Name: {player.name}, ELO: {round(player.elo,1)}, Wins: {player.wins}")
+    print(f"")
+def print_full_time(sorted_players):
+    print("Full-time players sorted by ELO:")
+    for rank, player in enumerate(sorted_players, start=1):
+        if player.sub == False:
+            print(f"Rank: {rank}, Name: {player.name}, ELO: {round(player.elo,1)}, Wins: {player.wins}")
+    print(f"")
 def get_group_id(name):
     conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
@@ -52,13 +65,7 @@ def fetch_history(group_id):
 
     return history
 
-if __name__ == "__main__":
-    group_id = get_group_id("Boyz Pickleball")
-    player_ids = fetch_players(group_id)
-    games = fetch_history(group_id)
-
-    players = {player_id: Player(player_id, player_name, sub) for player_id, player_name, sub in player_ids}
-    name_to_player = {player.name: player for player in players.values()}
+def play_games(games):
     for game in games:
         match = Games()
         player1 = players[game[0]]
@@ -81,14 +88,23 @@ if __name__ == "__main__":
         print(f"Old elo: {round(elo3, 1)}, New elo: {player3.name} - {round(player3.elo, 1)}, Elo diff: {round(player3.elo - elo3, 1)}, E3 = {round(match.E3, 2)}")
         print(f"Old elo: {round(elo4, 1)}, New elo: {player4.name} - {round(player4.elo, 1)}, Elo diff: {round(player4.elo - elo4, 1)}, E4 = {round(match.E4, 2)}")
         print(f"")
+
+if __name__ == "__main__":
+    group_id = get_group_id("Boyz Pickleball")
+    player_ids = fetch_players(group_id)
+    games = fetch_history(group_id)
+
+    players = {player_id: Player(player_id, player_name, sub) for player_id, player_name, sub in player_ids}
+    name_to_player = {player.name: player for player in players.values()}
+
+    play_games(games)
+
     sorted_players = sorted(players.values(), key=lambda player: player.elo, reverse=True)
     sorted_fulltime_players = sorted([player for player in players.values() if not player.sub], key=lambda x: x.elo, reverse=True)
 
-    print("Players sorted by ELO:")
-    for rank, player in enumerate(sorted_players, start=1):
-        #if player.sub == False:
-        print(f"Rank: {rank}, Name: {player.name}, ELO: {round(player.elo,1)}, Wins: {player.wins}")
-    print(f"")
+    print_all(sorted_players)
+    #print_full_time(sorted_fulltime_players)
+
     player_list = [
         "Anthony",
         "Felix",
@@ -101,7 +117,7 @@ if __name__ == "__main__":
         "Scarfo",
         "Cha-Nel",
         "Erica",
-        "Matt S",
+        "Silvio",
         "Sam",
         "Taurasi",
         "Sandra",
@@ -111,4 +127,4 @@ if __name__ == "__main__":
     sorted_playing_players = sorted([name_to_player[name] for name in player_list], key=lambda x: x.elo, reverse=True)
     history = match_history(sorted_playing_players)
     history.load_previous_week(games[-20:], sorted_players)
-    history.generate_games()
+    #history.generate_games()
