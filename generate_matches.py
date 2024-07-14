@@ -50,6 +50,7 @@ class match_history:
         self.players = {sorted_player.id: player_history(sorted_player) for sorted_player in sorted_players}
         self.previous_teammate_count = 0
         self.restart = False
+        self.games_scheduled = 0
 
     def print_game_schedule(self, game_title, game_players):
         def print_court(court_number, player1, player2, player3, player4):
@@ -127,13 +128,21 @@ class match_history:
         for player in self.players.values():
             print(f"{player.player.name}: Opponents: {player.unique_opponents_count()}")
 
-    def generate_games(self):
+    def generate_games(self, elo_split, elo_based, elo_diff):
         self.restart = False
-        self.Game1()
-        self.Game2()
-        self.Game3()
-        self.Game4()
-        self.Game5()
+
+        #self.generate_elo_split_games(elo_split)
+        #self.games_scheduled = elo_split
+
+        #self.generate_elo_based_games(elo_based, elo_diff)
+        #self.games_scheduled = elo_based + elo_split
+
+        self.generate_all_games2(elo_split, elo_based, elo_diff)
+        #self.Game1()
+        #self.Game2()
+        #self.Game3()
+        #self.Game4()
+        #self.Game5()
 
     def load_previous_week(self, games, players):
         player_dict = {player.id: player for player in players}
@@ -151,6 +160,179 @@ class match_history:
         for player in self.players.values():
             self.previous_teammate_count += len(player.teammates)
 
+    def validate_elo_split_games(self, num, teammates_count, test_players):
+        expected_teammates_count = num * len(self.sorted_players)
+        if teammates_count == expected_teammates_count + self.previous_teammate_count:
+            for player in test_players.values():
+                for opponents, count in player.get_opponents().items():
+                    if count > 1 or player.opponents_more_than_once() > 1:
+                        return True
+                    else:
+                        continue
+            return False
+        else:
+            return True
+
+    def validate_games(self, num, teammates_count, test_players, tolerance=None):
+        expected_teammates_count = num * len(self.sorted_players)
+        if teammates_count != expected_teammates_count + self.previous_teammate_count:
+            return True
+
+        for player in test_players.values():
+            for opponents, count in player.get_opponents().items():
+                if count > 2 or player.opponents_more_than_once() > 1:
+                    return True
+
+        if tolerance is not None:
+            for i in range(1, num + 1):
+                start_index = (i - 1) * 16
+                end_index = i * 16
+                current_sorted_players = self.sorted_players[start_index:end_index]
+                current_tolerance = tolerance + ((i-1) * 0.05)
+
+                game_matches = self.calculate_average(test_players, current_sorted_players)
+                if any(match > current_tolerance for match in game_matches):
+                    return True
+
+        return False
+
+    def generate_all_games2(self, num_split, num_based, elo_dif):
+        def generate_single_type(num, elo_split):
+            game_players = []
+            game_not_found = True
+            test_players = deepcopy(self.players)
+            sorted_players = self.sorted_players[:]
+
+            while game_not_found:
+                game_players = []
+                test_players = deepcopy(self.players)
+                teammates_count = 0
+
+                for _ in range(1, num + 1):
+                    if elo_split:
+                        elo_line = len(sorted_players) // 2
+                        high_elo = sorted_players[:elo_line]
+                        low_elo = sorted_players[elo_line:]
+                        random.shuffle(high_elo)
+                        random.shuffle(low_elo)
+                        test_players = self.update_teammates(test_players, high_elo, low_elo)
+                        test_players = self.update_opponents(test_players, high_elo, low_elo)
+                        game_players.extend(high_elo + low_elo)
+                    else:
+                        random.shuffle(sorted_players)
+                        test_players = self.update_teammates_single(test_players, sorted_players)
+                        test_players = self.update_opponents_single(test_players, sorted_players)
+                        game_players.extend(sorted_players)
+
+                for player in test_players.values():
+                    teammates_count += len(player.teammates)
+
+                game_not_found = self.validate_games(num, teammates_count, test_players,
+                                                     tolerance=elo_dif if not elo_split else None)
+
+            self.players = test_players
+            for i in range(1, num + 1):
+                start_index = (i - 1) * 16
+                end_index = i * 16
+                current_game_players = game_players[start_index:end_index]
+                self.print_game_schedule(f"Game {i + self.games_scheduled}", current_game_players)
+            self.games_scheduled += num
+
+        generate_single_type(num_split, elo_split=True)
+        generate_single_type(num_based, elo_split=False)
+
+    def validate_elo_based_games(self, num, teammates_count, test_players, sorted_players, team_tolerance):
+        expected_teammates_count = num * len(self.sorted_players)
+        if teammates_count == expected_teammates_count + self.previous_teammate_count:
+
+            for i in range(1, num + 1):
+                start_index = (i - 1) * 16
+                end_index = i * 16
+
+                current_sorted_players = sorted_players[start_index:end_index]
+                current_tolerance = team_tolerance + ((i-1)*0.05)
+
+                game1_match, game2_match, game3_match, game4_match = self.calculate_average(test_players,
+                                                                                            current_sorted_players)
+                if (game1_match <= current_tolerance and
+                        game2_match <= current_tolerance and
+                        game3_match <= current_tolerance and
+                        game4_match <= current_tolerance):
+                    for player in test_players.values():
+                        for opponents, count in player.get_opponents().items():
+                            if count > 2 or player.opponents_more_than_once() > 1:
+                                return True
+                            else:
+                                continue
+                    return False
+                else:
+                    return True
+        else:
+            return True
+    def generate_elo_split_games(self, num):
+
+        game_players = []
+        game_not_found = True
+        test_players = deepcopy(self.players)
+
+        while game_not_found:
+            game_players = []
+            test_players = deepcopy(self.players)
+            teammates_count = 0
+            for _ in range(1, num + 1):
+                elo_line = int(len(self.sorted_players) / 2)
+                high_elo = self.sorted_players[:elo_line]
+                low_elo = self.sorted_players[elo_line:]
+                random.shuffle(high_elo)
+                random.shuffle(low_elo)
+
+                test_players = self.update_teammates(test_players, high_elo, low_elo)
+                test_players = self.update_opponents(test_players, high_elo, low_elo)
+
+                game_players = game_players + high_elo + low_elo
+
+            for player in test_players.values():
+                teammates_count += len(player.teammates)
+
+            game_not_found = self.validate_elo_split_games(num, teammates_count, test_players)
+
+
+        self.players = test_players
+        for i in range(1, num + 1):
+            start_index = (i - 1) * 16
+            end_index = i * 16
+            current_game_players = game_players[start_index:end_index]
+            self.print_game_schedule(f"Game {i + self.games_scheduled}", current_game_players)
+
+
+    def generate_elo_based_games(self, num, elo_dif):
+        game_players = []
+        sorted_players = self.sorted_players[:]
+        game_not_found = True
+        test_players = deepcopy(self.players)
+
+        while game_not_found:
+            game_players = []
+            test_players = deepcopy(self.players)
+            teammates_count = 0
+            for _ in range(1, num + 1):
+                random.shuffle(sorted_players)
+
+                test_players = self.update_teammates_single(test_players, sorted_players)
+                test_players = self.update_opponents_single(test_players, sorted_players)
+
+                game_players = game_players + sorted_players
+
+            for player in test_players.values():
+                teammates_count += len(player.teammates)
+            game_not_found = self.validate_elo_based_games(num, teammates_count, test_players, game_players, elo_dif)
+
+        self.players = test_players
+        for i in range(1, num + 1):
+            start_index = (i - 1) * 16
+            end_index = i * 16
+            current_game_players = game_players[start_index:end_index]
+            self.print_game_schedule(f"Game {i + self.games_scheduled}", current_game_players)
     def Game1(self):
         elo_line = int(len(self.sorted_players) / 2)
         high_elo = self.sorted_players[:elo_line]

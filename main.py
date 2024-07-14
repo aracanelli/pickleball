@@ -127,4 +127,4 @@ if __name__ == "__main__":
     sorted_playing_players = sorted([name_to_player[name] for name in player_list], key=lambda x: x.elo, reverse=True)
     history = match_history(sorted_playing_players)
     history.load_previous_week(games[-20:], sorted_players)
-    #history.generate_games()
+    history.generate_games(2,3,0.2)
