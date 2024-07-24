@@ -67,3 +67,32 @@ class Player:
         self.sub = sub
         self.wins = 0
         self.losses = 0
+
+    def __repr__(self):
+        return f"Player({self.id}, {self.name})"
+
+    def __eq__(self, other):
+        return self.id == other.id and self.name == other.name
+
+    def __hash__(self):
+        return hash((self.id, self.name))
+
+class Player2:
+    def __init__(self, id, name, sub=False):
+        self.id = id
+        self.name = name
+        self.elo = 1000
+        self.sub = sub
+        self.wins = 0
+        self.losses = 0
+        self.opponents = {}
+
+    def add_opponents(self, opponent1, opponent2):
+        self._add_opponent(opponent1)
+        self._add_opponent(opponent2)
+
+    def _add_opponent(self, opponent):
+        if opponent in self.opponents:
+            self.opponents[opponent] += 1
+        else:
+            self.opponents[opponent] = 1
