@@ -1,10 +1,8 @@
-import itertools
-import psycopg2
+import csv
 import random
 import os
 from dotenv import load_dotenv
 from copy import deepcopy
-from calculate_elo import Player, Games
 
 # Load environment variables
 load_dotenv()
@@ -51,6 +49,11 @@ class match_history:
         self.previous_teammate_count = 0
         self.restart = False
         self.games_scheduled = 0
+        self.game_players1 = []
+        self.game_players2 = []
+        self.game_players3 = []
+        self.game_players4 = []
+        self.game_players5 = []
 
     def print_game_schedule(self, game_title, game_players):
         def print_court(court_number, player1, player2, player3, player4):
@@ -128,7 +131,7 @@ class match_history:
         for player in self.players.values():
             print(f"{player.player.name}: Opponents: {player.unique_opponents_count()}")
 
-    def generate_games(self, elo_split, elo_based, elo_diff):
+    def generate_games(self):
         self.restart = False
 
         #self.generate_elo_split_games(elo_split)
@@ -137,12 +140,14 @@ class match_history:
         #self.generate_elo_based_games(elo_based, elo_diff)
         #self.games_scheduled = elo_based + elo_split
 
-        self.generate_all_games2(elo_split, elo_based, elo_diff)
-        #self.Game1()
-        #self.Game2()
-        #self.Game3()
-        #self.Game4()
-        #self.Game5()
+        #self.generate_all_games2(elo_split, elo_based, elo_diff)
+        self.Game1()
+        self.Game2()
+        self.Game3()
+        self.Game4()
+        self.Game5()
+
+        self.create_game_csv([self.game_players1, self.game_players2, self.game_players3, self.game_players4, self.game_players5])
 
     def load_previous_week(self, games, players):
         player_dict = {player.id: player for player in players}
@@ -152,10 +157,7 @@ class match_history:
 
         new_player_list = [player_dict[player_id] for player_id in player_list]
 
-        for i in range(0, len(new_player_list), 16):
-            process_list = new_player_list[i:i + 16]
-            self.players = self.update_teammates_single(self.players, process_list)
-
+        self.players = self.update_teammates_single(self.players, new_player_list)
 
         for player in self.players.values():
             self.previous_teammate_count += len(player.teammates)
@@ -370,6 +372,8 @@ class match_history:
                 pass
 
         self.players = test_players
+        game_players = high_elo + low_elo
+        self.game_players1 = [player.name for player in game_players]
         self.print_game_schedule("Game 1", high_elo + low_elo)
     def Game2(self):
         elo_line = int(len(self.sorted_players) / 2)
@@ -405,6 +409,8 @@ class match_history:
                 pass
 
         self.players = test_players
+        game_players = high_elo + low_elo
+        self.game_players2 = [player.name for player in game_players]
         self.print_game_schedule("Game 2", high_elo + low_elo)
     def Game3(self):
         game_players = self.sorted_players[:]
@@ -413,7 +419,7 @@ class match_history:
         expected_teammates_count = game_num * len(self.sorted_players)
 
         game_not_found = True
-        team_tolerance = 0.1
+        team_tolerance = 1
         test_players = self.players
 
         while game_not_found:
@@ -436,7 +442,7 @@ class match_history:
                             game4_match <= team_tolerance):
                         for player in test_players.values():
                             for opponents, count in player.get_opponents().items():
-                                if count > 2 or player.opponents_more_than_once() > 1:
+                                if count > 5 or player.opponents_more_than_once() > 1:
                                     raise BreakOut
                                 else:
                                     continue
@@ -445,6 +451,7 @@ class match_history:
                 pass
 
         self.players = test_players
+        self.game_players3 = [player.name for player in game_players]
         self.print_game_schedule("Game 3", game_players)
     def Game4(self):
         game_players = self.sorted_players[:]
@@ -453,7 +460,7 @@ class match_history:
         expected_teammates_count = game_num * len(self.sorted_players)
 
         game_not_found = True
-        team_tolerance = 0.15
+        team_tolerance = 1
         test_players = self.players
 
         while game_not_found:
@@ -476,7 +483,7 @@ class match_history:
                             game4_match <= team_tolerance):
                         for player in test_players.values():
                             for opponents, count in player.get_opponents().items():
-                                if count > 2  or player.opponents_more_than_once() > 1:
+                                if count > 5 or player.opponents_more_than_once() > 1:
                                     raise BreakOut
                                 else:
                                     continue
@@ -485,6 +492,7 @@ class match_history:
                 pass
 
         self.players = test_players
+        self.game_players4 = [player.name for player in game_players]
         self.print_game_schedule("Game 4", game_players)
     def Game5(self):
         game_players = self.sorted_players[:]
@@ -493,7 +501,7 @@ class match_history:
         expected_teammates_count = game_num * len(self.sorted_players)
 
         game_not_found = True
-        team_tolerance = 0.2
+        team_tolerance = 1
         test_players = self.players
 
         while game_not_found:
@@ -516,7 +524,7 @@ class match_history:
                             game4_match <= team_tolerance):
                         for player in test_players.values():
                             for opponents, count in player.get_opponents().items():
-                                if count > 2:
+                                if count > 5:
                                     raise BreakOut
                                 else:
                                     continue
@@ -525,4 +533,55 @@ class match_history:
                 pass
 
         self.players = test_players
+        self.game_players5 = [player.name for player in game_players]
         self.print_game_schedule("Game 5", game_players)
+
+    def create_game_csv(self, game_sets, filename="games.csv"):
+        # Determine the number of games
+        num_games = len(game_sets)
+
+        # Open the CSV file for writing
+        with open(filename, mode='w', newline='') as file:
+            writer = csv.writer(file)
+
+            # Write the headers for each game
+            headers = []
+            for game_num in range(1, num_games + 1):
+                headers.extend([f"Game {game_num}", ""])
+            writer.writerow(headers)
+
+            # Maximum number of teams per game set
+            max_teams = max(len(game_set) // 4 for game_set in game_sets)
+
+            for team_num in range(max_teams):
+                row_team_names = []
+                row_team_1 = []
+                row_team_2 = []
+
+                for game_set in game_sets:
+                    self.replace_name(game_set, "Falcone", "Mike")
+                    self.replace_name(game_set, "Baller", "Ballerini")
+                    self.replace_name(game_set, "Steve", "Steven")
+                    start_idx = team_num * 4
+                    if start_idx + 3 < len(game_set):
+                        row_1 = [game_set[start_idx], game_set[start_idx + 2]]
+                        row_2 = [game_set[start_idx + 1], game_set[start_idx + 3]]
+
+                        row_team_names.extend([f"Team {team_num * 2 + 1}", f"Team {team_num * 2 + 2}"])
+                        row_team_1.extend(row_1)
+                        row_team_2.extend(row_2)
+                    else:
+                        row_team_names.extend(["", ""])
+                        row_team_1.extend(["", ""])
+                        row_team_2.extend(["", ""])
+
+                writer.writerow(row_team_names)
+                writer.writerow(row_team_1)
+                writer.writerow(row_team_2)
+                writer.writerow(["", ""])  # Empty row for spacing
+
+    def replace_name(self, players_list, old_name, new_name):
+        for i, name in enumerate(players_list):
+            if name == old_name:
+                players_list[i] = new_name
+                break

@@ -1,13 +1,7 @@
-import itertools
-import psycopg2
-import os
 from generate_matches import match_history, player_history
 from calculate_elo import Games, Player
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
-DATABASE_URL = os.getenv('DATABASE_URL')
+import database_fetch
+#from tests import match_history
 
 def print_all(sorted_players):
     print("All players sorted by ELO:")
@@ -21,51 +15,8 @@ def print_full_time(sorted_players):
         if player.sub == False:
             print(f"Rank: {rank}, Name: {player.name}, ELO: {round(player.elo,1)}, Wins: {player.wins}")
     print(f"")
-def get_group_id(name):
-    conn = psycopg2.connect(DATABASE_URL)
-    cursor = conn.cursor()
 
-    cursor.execute("select group_id from groups where name = '" + name + "'")
-
-    group_id = cursor.fetchone()
-
-    cursor.close()
-    conn.close()
-    return group_id[0]
-
-def fetch_players(group_id):
-    conn = psycopg2.connect(DATABASE_URL)
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT p.player_id, p.nick_name, pg.sub 
-        FROM player_groups pg, players p 
-        WHERE p.player_id = pg.player_id and group_id = 
-    """ + str(group_id))
-    games = cursor.fetchall()
-
-    cursor.close()
-    conn.close()
-
-    return games
-
-def fetch_history(group_id):
-    conn = psycopg2.connect(DATABASE_URL)
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT player1_id, player2_id, player3_id, player4_id, score1, score2
-        FROM history
-    """)
-
-    history = cursor.fetchall()
-
-    cursor.close()
-    conn.close()
-
-    return history
-
-def play_games(games):
+def play_games(games, players):
     for game in games:
         match = Games()
         player1 = players[game[0]]
@@ -89,42 +40,45 @@ def play_games(games):
         print(f"Old elo: {round(elo4, 1)}, New elo: {player4.name} - {round(player4.elo, 1)}, Elo diff: {round(player4.elo - elo4, 1)}, E4 = {round(match.E4, 2)}")
         print(f"")
 
+
+
+
 if __name__ == "__main__":
-    group_id = get_group_id("Boyz Pickleball")
-    player_ids = fetch_players(group_id)
-    games = fetch_history(group_id)
+    group_id = database_fetch.get_group_id("Boyz Pickleball")
+    player_ids = database_fetch.fetch_players(group_id)
+    games = database_fetch.fetch_history(group_id)
 
     players = {player_id: Player(player_id, player_name, sub) for player_id, player_name, sub in player_ids}
     name_to_player = {player.name: player for player in players.values()}
 
-    play_games(games)
+    play_games(games, players)
 
     sorted_players = sorted(players.values(), key=lambda player: player.elo, reverse=True)
     sorted_fulltime_players = sorted([player for player in players.values() if not player.sub], key=lambda x: x.elo, reverse=True)
 
-    print_all(sorted_players)
-    #print_full_time(sorted_fulltime_players)
+    #print_all(sorted_players)
+    print_full_time(sorted_fulltime_players)
 
     player_list = [
         "Anthony",
-        "Felix",
-        "James",
         "Matt",
-        "Jenna",
+        "James",
+        "Steve",
+        "Felix",
         "Falcone",
-        "Szymbo",
         "Fred",
-        "Scarfo",
+        "Mass",
+        "Samantha",
         "Cha-Nel",
         "Erica",
-        "Silvio",
+        "Baller",
         "Sam",
         "Taurasi",
         "Sandra",
-        "Sarah"
+        "James C"
     ]
 
     sorted_playing_players = sorted([name_to_player[name] for name in player_list], key=lambda x: x.elo, reverse=True)
     history = match_history(sorted_playing_players)
     history.load_previous_week(games[-20:], sorted_players)
-    history.generate_games(2,3,0.2)
+    history.generate_games()
